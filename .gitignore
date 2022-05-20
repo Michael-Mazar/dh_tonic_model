@@ -1,0 +1,3 @@
+# .gitignore
+x86_64/
+__pycache__/

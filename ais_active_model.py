@@ -1,0 +1,131 @@
+from matplotlib import pyplot as plt
+from ais_var_active import *
+from ais_plotter import *
+from neuron import h, gui
+import pylab as p
+import numpy as np
+import csv
+
+class ActivelaminaNeuron():
+    """A ball & stick neuron model describing """
+    def __init__(self):
+        self.Rin = None
+        self.label = 'active'
+        self.create_sections()
+        self.build_topology()
+        self.all = h.allsec()
+        self.dendrites = [self.dend]
+        self.neuron_cable = [self.soma, self.spacer, self.AIS, self.axon]
+        self.define_geometry()
+        self.set_biophysics()
+        self.add_current_stim()
+    def __repr__(self):
+        return 'ActivelaminaNeuron'
+    def create_sections(self):
+        """ Create morphological sections """
+        self.soma = h.Section(name='soma', cell=self)
+        self.dend = h.Section(name='dend', cell=self)
+        self.spacer = h.Section(name='spacer', cell=self)
+        self.AIS = h.Section(name='AIS', cell=self)
+        self.axon = h.Section(name='axon', cell=self)
+    def build_topology(self):
+        '''Connect sections together'''
+        self.dend.connect(self.soma(0))
+        self.spacer.connect(self.soma(1))
+        self.AIS.connect(self.spacer(1))
+        self.axon.connect(self.AIS(1))
+    def define_geometry(self):
+        '''Define Length, Diamter and        Number of Segment per Section'''
+        # Dendrites
+        self.dend.L = DEND_L
+        self.dend.diam = DEND_DIAM
+        self.dend.nseg = DEND_NSEG
+        # Soma
+        self.soma.L = SOMA_L
+        self.soma.diam = SOMA_DIAM
+        self.soma.nseg = SOMA_NSEG
+        # Spacer
+        self.spacer.L = SPACER_L        # change this for neuropathic conditions
+        self.spacer.diam = SPACER_DIAM
+        self.spacer.nseg = SPACER_NSEG
+        # AIS
+        self.AIS.L = AIS_L
+        self.AIS.diam = AIS_DIAM
+        self.AIS.nseg = AIS_NSEG
+        # Axon
+        self.axon.L = AXON_L
+        self.axon.diam = AXON_DIAM
+        self.axon.nseg = AXON_NSEG
+
+    def set_biophysics(self):
+        '''Set cell biophyisics including passive and active properties '''
+        # Set passive membrane biophysics
+        for sec in self.all:
+            sec.Ra = R_A
+            sec.cm = C_M
+        # Set leaky channels for the model:
+        for sec in self.all:
+            sec.insert('pas')
+            sec.g_pas = GPAS_NEW  # in this version its .pas.g instead of g_pas
+            sec.e_pas = E_PAS
+        # Insert soma mechanisms:
+        self.soma.insert('B_Na')
+        self.soma.insert('KDRI')
+        # Insert spacer characteristics
+        self.spacer.insert('B_Na')
+        self.spacer.insert('KDRI')
+        # Insert dendrite mechanisms
+        self.dend.insert('SS')
+        self.dend.insert('KDRI')
+        # Insert axon initial segment mechanisms
+        self.AIS.insert('B_Na')
+        self.AIS.insert('KDRI')
+        # Insert axon mechanisms
+        self.axon.insert('B_Na')
+        self.axon.insert('KDRI')
+        # Set Active Reversal Potentials
+        for sec in self.neuron_cable + self.dendrites:
+            sec.ena = E_NA
+            sec.ek = E_K
+        # Set channel densities:
+        # Dendrites
+        self.dend.gnabar_SS = 0
+        self.dend.gkbar_KDRI = GK_BAR_DEND
+        # Soma
+        self.soma.gnabar_B_Na = GNA_BAR_SOMA
+        self.soma.gkbar_KDRI = GKDR_BAR_SOMA
+        # Spacer - properties were given the same as the soma
+        self.spacer.gnabar_B_Na = GNA_BAR_SOMA
+        self.spacer.gkbar_KDRI = GKDR_BAR_SOMA
+        # AIS
+        self.AIS.gnabar_B_Na = GNA_BAR_AIS
+        self.AIS.gkbar_KDRI = GK_BAR_AIS
+        # axon
+        self.axon.gnabar_B_Na = GNA_BAR_AXON
+        self.axon.gkbar_KDRI = GK_BAR_AXON
+
+    def add_current_stim(self, delay=DELAY, dur=DUR, current=CURRENT, loc=RECORDING_LOCATION):
+        """Attach a current Clamp to a cell.
+        :param cell: Cell object to attach the current clamp.
+        :param delay: Onset of the injected current.
+        :param dur: Duration of the stimulus.
+        :param amp: Magnitude of the current.
+        :param loc: Location on the dendrite where the stimulus is placed.
+        """
+        self.stim = h.IClamp(self.soma(loc))
+        self.stim.amp = current
+        self.stim.delay = delay
+        self.stim.dur = dur
+
+    def set_recording(self):
+        """Set soma, axon initial segment, and time recording vectors on the cell.
+        :param cell: Cell to record from.
+        :return: the soma, dendrite, and time vectors as a tuple.
+        """
+        self.soma_v_vec = h.Vector()  # Membrane potential vector at soma
+        self.AIS_v_vec = h.Vector()  # Membrane potential vector at dendrite
+        self.t_vec = h.Vector()  # Time stamp vector
+        self.soma_v_vec.record(self.soma(0.5)._ref_v)
+        self.AIS_v_vec.record(self.AIS(0.5)._ref_v)
+        self.t_vec.record(h._ref_t)
+
